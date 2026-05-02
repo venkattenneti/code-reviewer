@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: code-reviewer
+
+app:
+  github:
+    webhook-secret: ${GITHUB_WEBHOOK_SECRET}
