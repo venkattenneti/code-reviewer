@@ -5,3 +5,8 @@ spring:
 app:
   github:
     webhook-secret: ${GITHUB_WEBHOOK_SECRET}
+    token: ${GITHUB_TOKEN}
+
+logging:
+  level:
+    com.personalProject.code_reviewer: DEBUG
