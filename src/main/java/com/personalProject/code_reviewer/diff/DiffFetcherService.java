@@ -25,7 +25,7 @@ public class DiffFetcherService {
             log.error("Full error: ", e);
             return null;
         }
-        log.atDebug().addArgument(rawDiff).log("DiffFetcherService.fetchDiff() - end | rawDiff: {}");
+        log.atDebug().log("DiffFetcherService.fetchDiff() - end");
         return rawDiff;
     }
 }

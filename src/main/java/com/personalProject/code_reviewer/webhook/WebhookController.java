@@ -1,6 +1,9 @@
 package com.personalProject.code_reviewer.webhook;
 
 import com.personalProject.code_reviewer.diff.DiffFetcherService;
+import com.personalProject.code_reviewer.llm.LLMReviewService;
+import com.personalProject.code_reviewer.llm.PromptBuilderService;
+import com.personalProject.code_reviewer.llm.model.ReviewComment;
 import lombok.extern.slf4j.Slf4j;
 import com.personalProject.code_reviewer.webhook.model.GitHubWebhookPayload;
 import org.springframework.http.HttpStatus;
@@ -13,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
+import java.util.List;
+
 @Slf4j
 @RestController
 public class WebhookController {
@@ -20,11 +25,16 @@ public class WebhookController {
     private final HmacValidator hmacValidator;
     private final ObjectMapper objectMapper;
     private final DiffFetcherService diffFetcherService;
+    private final PromptBuilderService promptBuilderService;
+    private final LLMReviewService llmReviewService;
 
-    public WebhookController(HmacValidator hmacValidator, ObjectMapper objectMapper, DiffFetcherService diffFetcherService) {
+    public WebhookController(HmacValidator hmacValidator, ObjectMapper objectMapper, DiffFetcherService diffFetcherService,PromptBuilderService promptBuilderService,
+                             LLMReviewService llmReviewService) {
         this.hmacValidator = hmacValidator;
         this.objectMapper = objectMapper;
         this.diffFetcherService= diffFetcherService;
+        this.promptBuilderService = promptBuilderService;
+        this.llmReviewService = llmReviewService;
     }
 
     @PostMapping("/webhook/github")
@@ -64,7 +74,22 @@ public class WebhookController {
         }
 
         log.info("Diff fetched successfully for PR #{} | Size: {} chars", payloadPullRequestNumber, rawDiff.length());
-        log.debug("Raw diff:\n{}", rawDiff);
+
+        String prompt = promptBuilderService.buildPrompt(rawDiff);
+
+        List<ReviewComment> comments = llmReviewService.getReview(prompt);
+
+        if (comments.isEmpty()) {
+            log.info("LLM returned no review comments for PR #{}",
+                    payload.pullRequest().number());
+        } else {
+            log.info("LLM returned {} comment(s) for PR #{}",
+                    comments.size(), payload.pullRequest().number());
+            comments.forEach(c ->
+                    log.info("[{}] {} → {}",
+                            c.severity(), c.file(), c.suggestion())
+            );
+        }
 
         return ResponseEntity.ok("Webhook received");
     }
