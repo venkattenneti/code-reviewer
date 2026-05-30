@@ -3,8 +3,8 @@ spring:
     name: code-reviewer
   ai:
     openai:
-#      api-key: ${GROQ_API_KEY}
-      api-key: invalid-key
+      api-key: ${GROQ_API_KEY}
+#      api-key: invalid-key
       base-url: https://api.groq.com/openai
       chat:
         options:

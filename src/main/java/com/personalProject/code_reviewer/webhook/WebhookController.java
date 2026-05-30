@@ -1,6 +1,7 @@
 package com.personalProject.code_reviewer.webhook;
 
 import com.personalProject.code_reviewer.diff.DiffFetcherService;
+import com.personalProject.code_reviewer.github.GitHubCommentService;
 import com.personalProject.code_reviewer.llm.LLMReviewService;
 import com.personalProject.code_reviewer.llm.PromptBuilderService;
 import com.personalProject.code_reviewer.llm.model.ReviewComment;
@@ -27,14 +28,16 @@ public class WebhookController {
     private final DiffFetcherService diffFetcherService;
     private final PromptBuilderService promptBuilderService;
     private final LLMReviewService llmReviewService;
+    private final GitHubCommentService gitHubCommentService;
 
     public WebhookController(HmacValidator hmacValidator, ObjectMapper objectMapper, DiffFetcherService diffFetcherService,PromptBuilderService promptBuilderService,
-                             LLMReviewService llmReviewService) {
+                             LLMReviewService llmReviewService,GitHubCommentService gitHubCommentService) {
         this.hmacValidator = hmacValidator;
         this.objectMapper = objectMapper;
         this.diffFetcherService= diffFetcherService;
         this.promptBuilderService = promptBuilderService;
         this.llmReviewService = llmReviewService;
+        this.gitHubCommentService=gitHubCommentService;
     }
 
     @PostMapping("/webhook/github")
@@ -83,11 +86,10 @@ public class WebhookController {
             log.info("LLM returned no review comments for PR #{}",
                     payload.pullRequest().number());
         } else {
-            log.info("LLM returned {} comment(s) for PR #{}",
-                    comments.size(), payload.pullRequest().number());
-            comments.forEach(c ->
-                    log.info("[{}] {} → {}",
-                            c.severity(), c.file(), c.suggestion())
+            gitHubCommentService.postReview(
+                    payload.repositoryData().fullName(),
+                    payload.pullRequest().number(),
+                    comments
             );
         }
 
