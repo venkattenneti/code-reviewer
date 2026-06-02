@@ -1,5 +1,10 @@
 package com.personalProject.code_reviewer.webhook;
 
+import com.personalProject.code_reviewer.diff.DiffFetcherService;
+import com.personalProject.code_reviewer.github.GitHubCommentService;
+import com.personalProject.code_reviewer.llm.LLMReviewService;
+import com.personalProject.code_reviewer.llm.PromptBuilderService;
+import com.personalProject.code_reviewer.llm.model.ReviewComment;
 import lombok.extern.slf4j.Slf4j;
 import com.personalProject.code_reviewer.webhook.model.GitHubWebhookPayload;
 import org.springframework.http.HttpStatus;
@@ -12,28 +17,39 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
+import java.util.List;
+
 @Slf4j
 @RestController
 public class WebhookController {
 
     private final HmacValidator hmacValidator;
     private final ObjectMapper objectMapper;
+    private final DiffFetcherService diffFetcherService;
+    private final PromptBuilderService promptBuilderService;
+    private final LLMReviewService llmReviewService;
+    private final GitHubCommentService gitHubCommentService;
 
-    public WebhookController(HmacValidator hmacValidator, ObjectMapper objectMapper) {
+    public WebhookController(HmacValidator hmacValidator, ObjectMapper objectMapper, DiffFetcherService diffFetcherService,PromptBuilderService promptBuilderService,
+                             LLMReviewService llmReviewService,GitHubCommentService gitHubCommentService) {
         this.hmacValidator = hmacValidator;
         this.objectMapper = objectMapper;
+        this.diffFetcherService= diffFetcherService;
+        this.promptBuilderService = promptBuilderService;
+        this.llmReviewService = llmReviewService;
+        this.gitHubCommentService=gitHubCommentService;
     }
 
     @PostMapping("/webhook/github")
     public ResponseEntity<String> handleWebhook(
             @RequestHeader(value = "X-Hub-Signature-256", required = false) String signatureHeader, @RequestBody String rawPayload) {
+        String rawDiff;
+        GitHubWebhookPayload payload;
 
         if (!hmacValidator.isValidSignature(rawPayload, signatureHeader)) {
             log.warn("Invalid or missing webhook signature. Request rejected.");
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Invalid signature");
         }
-
-        GitHubWebhookPayload payload;
 
         try {
             payload = objectMapper.readValue(rawPayload, GitHubWebhookPayload.class);
@@ -47,11 +63,35 @@ public class WebhookController {
             return ResponseEntity.ok("Webhook acknowledged but ignored");
         }
 
+        String payloadAction= payload.action();
+        int payloadPullRequestNumber= payload.pullRequest().number();
+        String payloadPullRequestDiffUrl= payload.pullRequest().diffUrl();
+        String payloadRepositoryName= payload.repositoryData().fullName();
         log.info("Webhook received | Action: {} | PR #{} | Repo: {} | Diff URL: {}",
-                payload.action(),
-                payload.pullRequest().number(),
-                payload.repositoryData().fullName(),
-                payload.pullRequest().diffUrl());
+                payloadAction, payloadPullRequestNumber, payloadRepositoryName, payloadPullRequestDiffUrl);
+
+        rawDiff= diffFetcherService.fetchDiff(payloadPullRequestDiffUrl);
+        if (rawDiff == null) {
+            log.error("Failed to fetch diff for PR #{}. Aborting.", payloadPullRequestNumber);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to fetch diff");
+        }
+
+        log.info("Diff fetched successfully for PR #{} | Size: {} chars", payloadPullRequestNumber, rawDiff.length());
+
+        String prompt = promptBuilderService.buildPrompt(rawDiff);
+
+        List<ReviewComment> comments = llmReviewService.getReview(prompt);
+
+        if (comments.isEmpty()) {
+            log.info("LLM returned no review comments for PR #{}",
+                    payload.pullRequest().number());
+        } else {
+            gitHubCommentService.postReview(
+                    payload.repositoryData().fullName(),
+                    payload.pullRequest().number(),
+                    comments
+            );
+        }
 
         return ResponseEntity.ok("Webhook received");
     }

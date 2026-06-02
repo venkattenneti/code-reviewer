@@ -1,7 +1,21 @@
 spring:
   application:
     name: code-reviewer
+  ai:
+    openai:
+      api-key: ${GROQ_API_KEY}
+#      api-key: invalid-key
+      base-url: https://api.groq.com/openai
+      chat:
+        options:
+          model: llama-3.3-70b-versatile
+          temperature: 0.2
 
 app:
   github:
     webhook-secret: ${GITHUB_WEBHOOK_SECRET}
+    token: ${GITHUB_TOKEN}
+
+logging:
+  level:
+    com.personalProject.code_reviewer: DEBUG
