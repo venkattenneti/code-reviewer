@@ -5,6 +5,9 @@ import com.personalProject.code_reviewer.github.GitHubCommentService;
 import com.personalProject.code_reviewer.llm.LLMReviewService;
 import com.personalProject.code_reviewer.llm.PromptBuilderService;
 import com.personalProject.code_reviewer.llm.model.ReviewComment;
+import com.personalProject.code_reviewer.persistence.service.ReviewPersistenceService;
+import com.personalProject.code_reviewer.webhook.model.PullRequestData;
+import com.personalProject.code_reviewer.webhook.model.RepositoryData;
 import lombok.extern.slf4j.Slf4j;
 import com.personalProject.code_reviewer.webhook.model.GitHubWebhookPayload;
 import org.springframework.http.HttpStatus;
@@ -29,15 +32,17 @@ public class WebhookController {
     private final PromptBuilderService promptBuilderService;
     private final LLMReviewService llmReviewService;
     private final GitHubCommentService gitHubCommentService;
+    private final ReviewPersistenceService reviewPersistenceService;
 
     public WebhookController(HmacValidator hmacValidator, ObjectMapper objectMapper, DiffFetcherService diffFetcherService,PromptBuilderService promptBuilderService,
-                             LLMReviewService llmReviewService,GitHubCommentService gitHubCommentService) {
+                             LLMReviewService llmReviewService,GitHubCommentService gitHubCommentService,ReviewPersistenceService reviewPersistenceService) {
         this.hmacValidator = hmacValidator;
         this.objectMapper = objectMapper;
         this.diffFetcherService= diffFetcherService;
         this.promptBuilderService = promptBuilderService;
         this.llmReviewService = llmReviewService;
         this.gitHubCommentService=gitHubCommentService;
+        this.reviewPersistenceService= reviewPersistenceService;
     }
 
     @PostMapping("/webhook/github")
@@ -57,16 +62,24 @@ public class WebhookController {
             log.error("Failed to parse webhook payload: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid JSON payload");
         }
+        String payloadAction= payload.action();
+        RepositoryData repositoryData= payload.repositoryData();
+        String payloadRepositoryName= repositoryData.fullName();
+        PullRequestData pullRequest= payload.pullRequest();
+        String commitSha= pullRequest.head().sha();
+        String payloadPullRequestDiffUrl= pullRequest.diffUrl();
+        int payloadPullRequestNumber= pullRequest.number();
 
-        if (payload.pullRequest() == null || payload.repositoryData() == null) {
+        if (pullRequest == null || repositoryData == null) {
             log.warn("Webhook received but pull_request or repository is null. Skipping.");
             return ResponseEntity.ok("Webhook acknowledged but ignored");
         }
 
-        String payloadAction= payload.action();
-        int payloadPullRequestNumber= payload.pullRequest().number();
-        String payloadPullRequestDiffUrl= payload.pullRequest().diffUrl();
-        String payloadRepositoryName= payload.repositoryData().fullName();
+        if(reviewPersistenceService.isAlreadyReviewed(commitSha)){
+            log.debug("CommitSha={} already reviewed — skipping duplicate webhook", commitSha);
+            return ResponseEntity.ok("Already reviewed — skipped");
+        }
+
         log.info("Webhook received | Action: {} | PR #{} | Repo: {} | Diff URL: {}",
                 payloadAction, payloadPullRequestNumber, payloadRepositoryName, payloadPullRequestDiffUrl);
 
@@ -84,14 +97,16 @@ public class WebhookController {
 
         if (comments.isEmpty()) {
             log.info("LLM returned no review comments for PR #{}",
-                    payload.pullRequest().number());
+                    payloadPullRequestNumber);
         } else {
             gitHubCommentService.postReview(
-                    payload.repositoryData().fullName(),
-                    payload.pullRequest().number(),
+                    payloadRepositoryName,
+                    payloadPullRequestNumber,
                     comments
             );
         }
+
+        reviewPersistenceService.saveReview(payloadRepositoryName, payloadPullRequestNumber, commitSha, payloadAction, comments);
 
         return ResponseEntity.ok("Webhook received");
     }

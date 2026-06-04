@@ -6,4 +6,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PullRequestData(
         @JsonProperty("number") int number,
-        @JsonProperty("diff_url") String diffUrl ) { }
+        @JsonProperty("diff_url") String diffUrl,
+        @JsonProperty("head") HeadData head) {
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record HeadData(
+            @JsonProperty("sha") String sha   //pull_request.head.sha
+    ){}
+}
