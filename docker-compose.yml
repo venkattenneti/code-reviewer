@@ -1,15 +1,53 @@
 services:
-  postgres:
-    image: postgres:16
+  db:
+    image: postgres:16-alpine
     container_name: code-reviewer-db
+
     environment:
       POSTGRES_DB: code_reviewer
-      POSTGRES_USER: codereviewer
-      POSTGRES_PASSWORD: codereviewer123
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d code_reviewer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - code-reviewer-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: code-reviewer-app
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/code_reviewer
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    networks:
+      - code-reviewer-network
+
+
+networks:
+  code-reviewer-network:
+    driver: bridge
 
 volumes:
   postgres_data:
