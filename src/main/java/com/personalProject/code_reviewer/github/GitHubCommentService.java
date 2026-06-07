@@ -48,7 +48,7 @@ public class GitHubCommentService {
             log.atDebug().addArgument(githubComments.size()).log("GitHubCommentService.postReview() - Number of GithubComments:{}");
             boolean prHasErrors= comments.stream()
                     .anyMatch(comment -> "ERROR".equalsIgnoreCase(comment.severity()));
-            String reviewEvent= "COMMENT"; //prHasErrors ? "REQUEST_CHANGES" : "COMMENT";
+            String reviewEvent= prHasErrors ? "REQUEST_CHANGES" : "COMMENT";
             log.atDebug().addArgument(prHasErrors).addArgument(reviewEvent).log("GitHubCommentService.postReview() - HasErrors:{},Review Event:{}");
             GitHubReviewRequest reviewRequest = new GitHubReviewRequest(
                     summaryBody,
