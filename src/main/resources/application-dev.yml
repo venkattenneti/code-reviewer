@@ -1,0 +1,8 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://db:5432/code_reviewer}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
