@@ -1,0 +1,12 @@
+server:
+  port: ${PORT:10000}
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+logging:
+  level:
+    com.personalProject.code_reviewer: INFO

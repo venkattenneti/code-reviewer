@@ -4,16 +4,11 @@ spring:
   ai:
     openai:
       api-key: ${GROQ_API_KEY}
-#      api-key: invalid-key
       base-url: https://api.groq.com/openai
       chat:
         options:
           model: llama-3.3-70b-versatile
           temperature: 0.2
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/code_reviewer?TimeZone=Asia/Kolkata}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
   jpa:
     hibernate:
       ddl-auto: update
@@ -22,6 +17,7 @@ spring:
       hibernate:
         jdbc:
           time_zone: Asia/Kolkata
+    open-in-view: false
 
 app:
   github:
