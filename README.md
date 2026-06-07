@@ -1,1 +1,1 @@
-# code-reviewer
+# LLM Code Reviewer Application
